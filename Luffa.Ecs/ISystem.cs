@@ -4,7 +4,7 @@
     {
         IEntityFilter Filter { get; }
 
-        void OnUpdate();
+        void OnUpdate(World world, CmdBuffer cmd);
     }
 
     public abstract class SystemBase : ISystem
@@ -13,15 +13,18 @@
 
         protected SystemBase() { }
 
-        public void OnUpdate()
+        public void OnUpdate(World world, CmdBuffer cmd)
         {
-            foreach (var memory in Filter.MatchedEntity)
+            foreach (var arch in Filter.MatchedArchetype)
             {
-                UpdateEntity(memory);
+                if (world.TryGetEntityMemory(arch, out EntityMemory memory))
+                {
+                    UpdateEntity(world, memory, cmd);
+                }
             }
         }
 
-        protected abstract void UpdateEntity(EntityMemory memory);
+        protected abstract void UpdateEntity(World world, EntityMemory memory, CmdBuffer cmd);
 
         protected ComponentViewer GetComponentViewer(EntityMemory memory)
         {
@@ -36,6 +39,11 @@
         protected ManagedComponentLocator<T> GetManagedLocator<T>(EntityMemory memory) where T : IComponent
         {
             return memory.GetManagedComponentLocator<T>();
+        }
+
+        protected UnmanagedComponentLocator<EntityMemory.Info> GetEntityLocator(EntityMemory memory)
+        {
+            return memory.GetEntityLocator();
         }
     }
 }

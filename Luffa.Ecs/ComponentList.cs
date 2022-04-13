@@ -35,11 +35,6 @@ namespace Luffa.Ecs
     public interface IComponentList<T> : IComponentList, IList<T> where T : IComponent
     {
         /// <summary>
-        /// 不安全的方法! 你必须保证Span生命周期内没有任何结构变化, 否则可能出现悬垂引用
-        /// </summary>
-        Span<T> AsSpan();
-
-        /// <summary>
         /// 不安全的方法! 你必须保证在使用引用期间没有任何结构变化, 否则可能出现悬垂引用
         /// </summary>
         ref T GetReference(int index);
@@ -281,11 +276,6 @@ namespace Luffa.Ecs
             int lastIndex = Count - 1;
             this[index] = this[lastIndex];
             RemoveAt(lastIndex);
-        }
-
-        public Span<T> AsSpan()
-        {
-            return new Span<T>(_items);
         }
 
         public ref T GetReference(int index)

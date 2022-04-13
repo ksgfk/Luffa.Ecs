@@ -28,6 +28,17 @@ namespace Luffa.Ecs
         }
     }
 
+    public static class UnmanagedComponentLocatorExtension
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static EntityHandle Locate(in this UnmanagedComponentLocator<EntityMemory.Info> locator,
+            in ComponentViewer.Indexer indexer,
+            World world)
+        {
+            return world.GetEntityUnsafe(locator.Locate(in indexer).UniqueId);
+        }
+    }
+
     public readonly struct Chunk
     {
         public readonly byte[] Data;

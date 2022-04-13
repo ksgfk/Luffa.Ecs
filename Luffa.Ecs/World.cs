@@ -10,6 +10,7 @@ namespace Luffa.Ecs
             public EntityMemory? Memory;
             public int InnerId;
             public int Version;
+            public bool IsMarkDelete;
         }
 
         private class FilterMatch
@@ -30,48 +31,45 @@ namespace Luffa.Ecs
             }
         }
 
-        private readonly TypeTrieTree _archetype;
         private readonly Dictionary<EntityArchetype, EntityMemory> _component;
+
         private readonly List<EntityInfo> _entity;
-        private readonly Queue<int> _empty;
+        private readonly Queue<int> _entityEmptySlot;
+
         private readonly List<ISystem> _system;
         private readonly List<FilterMatch> _match;
 
-        public int EntityCount => _entity.Count - _empty.Count;
+        private readonly CmdBuffer _mainCmdBuffer;
+
+        public int EntityCount => _entity.Count - _entityEmptySlot.Count;
 
         public World()
         {
-            _archetype = new TypeTrieTree();
             _component = new Dictionary<EntityArchetype, EntityMemory>();
             _entity = new List<EntityInfo>();
-            _empty = new Queue<int>();
+            _entityEmptySlot = new Queue<int>();
             _system = new List<ISystem>();
             _match = new List<FilterMatch>();
+            _mainCmdBuffer = new CmdBuffer();
         }
 
         public void AddArchetype(EntityArchetype archetype)
         {
-            _archetype.Add(archetype);
+            GetOrCreateMemory(archetype);
         }
 
         public EntityArchetype Attach(EntityArchetype archetype, ComponentType type)
         {
-            int index = archetype.IndexOf(type);
-            if (index >= 0) { throw new ArgumentException($"duplicate type {type}"); }
-            ComponentType[] newType = new ComponentType[archetype.Count + 1];
-            archetype.Attach(newType, type);
-            _archetype.TryAdd(newType, out var result);
-            return result;
+            EntityArchetype find = archetype.Attach(type);
+            GetOrCreateMemory(find);
+            return find;
         }
 
         public EntityArchetype Detach(EntityArchetype archetype, ComponentType type)
         {
-            int index = archetype.IndexOf(type);
-            if (index < 0) { throw new ArgumentException($"type {type} dose not exist"); }
-            ComponentType[] newType = new ComponentType[archetype.Count - 1];
-            archetype.Detach(newType, index);
-            _archetype.TryAdd(newType, out var result);
-            return result;
+            EntityArchetype find = archetype.Detach(type);
+            GetOrCreateMemory(find);
+            return find;
         }
 
         private EntityMemory GetOrCreateMemory(EntityArchetype archetype)
@@ -86,7 +84,7 @@ namespace Luffa.Ecs
                     if (filter.IsMatch(archetype))
                     {
                         matched.Add(archetype);
-                        filter.MatchedEntity.Add(memory);
+                        filter.MatchedArchetype.Add(archetype);
                     }
                 }
             }
@@ -96,14 +94,14 @@ namespace Luffa.Ecs
         private int RequestUniqueId()
         {
             int id;
-            if (_empty.Count == 0)
+            if (_entityEmptySlot.Count == 0)
             {
                 id = _entity.Count;
                 _entity.Add(new EntityInfo());
             }
             else
             {
-                id = _empty.Dequeue();
+                id = _entityEmptySlot.Dequeue();
             }
             return id;
         }
@@ -127,10 +125,9 @@ namespace Luffa.Ecs
             return entity.Version == info.Version && info.Memory != null;
         }
 
-        public void DestroyEntity(EntityHandle entity)
+        private void DestroyEntity(int index)
         {
-            if (!IsValidEntity(entity)) { throw new InvalidOperationException("invalid entity"); }
-            int destroyedIndex = entity.Index;
+            int destroyedIndex = index;
             EntityInfo destroyed = _entity[destroyedIndex];
             EntityMemory memory = destroyed.Memory!;
             int movedIndex = memory.Release(destroyed.InnerId);
@@ -143,7 +140,13 @@ namespace Luffa.Ecs
             destroyed.Memory = null!;
             destroyed.InnerId = -1;
             destroyed.Version++;
-            _empty.Enqueue(destroyedIndex);
+            _entityEmptySlot.Enqueue(destroyedIndex);
+        }
+
+        public void DestroyEntity(EntityHandle entity)
+        {
+            if (!IsValidEntity(entity)) { throw new InvalidOperationException("invalid entity"); }
+            DestroyEntity(entity.Index);
         }
 
         public ref T GetUnmanagedComponent<T>(EntityHandle entity) where T : unmanaged, IComponent
@@ -165,10 +168,21 @@ namespace Luffa.Ecs
             return new EntityHandle(index, _entity[index].Version);
         }
 
-        public EntityMemory GetEntityMemory(EntityHandle entity)
+        public EntityMemory GetEntityMemoryUnsafe(EntityHandle entity)
         {
             if (!IsValidEntity(entity)) { throw new InvalidOperationException("invalid entity"); }
             return _entity[entity.Index].Memory!;
+        }
+
+        public EntityMemory GetEntityMemory(EntityArchetype archetype)
+        {
+            return _component[archetype];
+        }
+
+        public bool TryGetEntityMemory(EntityArchetype archetype, out EntityMemory memory)
+        {
+            bool isFind = _component.TryGetValue(archetype, out memory);
+            return isFind;
         }
 
         public bool HasComponent(EntityHandle entity, ComponentType type)
@@ -182,28 +196,33 @@ namespace Luffa.Ecs
             return HasComponent(entity, TypeInfo.Get<T>());
         }
 
-        private void MoveComponent(EntityHandle from, EntityMemory newMemory)
+        private void MoveComponent(int index, EntityMemory newMemory)
         {
-            EntityInfo info = _entity[from.Index];
+            EntityInfo info = _entity[index];
             EntityMemory oldMemory = info.Memory!;
             int oldInnerId = info.InnerId;
             var (newIndex, movedUniqueId) = oldMemory.MoveTo(info.InnerId, newMemory);
             info.Memory = newMemory;
             info.InnerId = newIndex;
-            if (movedUniqueId != from.Index)
+            if (movedUniqueId != index)
             {
                 EntityInfo moved = _entity[movedUniqueId];
                 moved.InnerId = oldInnerId;
             }
         }
 
+        private EntityMemory InternalAddComponent(int index, ComponentType type)
+        {
+            EntityArchetype newArch = Attach(_entity[index].Memory!.Archetype, type);
+            EntityMemory newMemory = GetOrCreateMemory(newArch);
+            MoveComponent(index, newMemory);
+            return newMemory;
+        }
+
         private EntityMemory InternalAddComponent(EntityHandle entity, ComponentType type)
         {
             if (!IsValidEntity(entity)) { throw new InvalidOperationException("invalid entity"); }
-            EntityArchetype newArch = Attach(_entity[entity.Index].Memory!.Archetype, type);
-            EntityMemory newMemory = GetOrCreateMemory(newArch);
-            MoveComponent(entity, newMemory);
-            return newMemory;
+            return InternalAddComponent(entity.Index, type);
         }
 
         public void AddComponent(EntityHandle entity, ComponentType type)
@@ -225,13 +244,18 @@ namespace Luffa.Ecs
             return ref newMemory.GetManagedComponent<T>(info.InnerId);
         }
 
+        private EntityMemory InternalRemoveComponent(int index, ComponentType type)
+        {
+            EntityArchetype newArch = Detach(_entity[index].Memory!.Archetype, type);
+            EntityMemory newMemory = GetOrCreateMemory(newArch);
+            MoveComponent(index, newMemory);
+            return newMemory;
+        }
+
         private EntityMemory InternalRemoveComponent(EntityHandle entity, ComponentType type)
         {
             if (!IsValidEntity(entity)) { throw new InvalidOperationException("invalid entity"); }
-            EntityArchetype newArch = Detach(_entity[entity.Index].Memory!.Archetype, type);
-            EntityMemory newMemory = GetOrCreateMemory(newArch);
-            MoveComponent(entity, newMemory);
-            return newMemory;
+            return InternalRemoveComponent(entity.Index, type);
         }
 
         public void RemoveComponent(EntityHandle entity, ComponentType type)
@@ -255,7 +279,7 @@ namespace Luffa.Ecs
                 if (filter.IsMatch(arch))
                 {
                     matched.Add(arch);
-                    filter.MatchedEntity.Add(_component[arch]);
+                    filter.MatchedArchetype.Add(arch);
                 }
             }
         }
@@ -267,11 +291,78 @@ namespace Luffa.Ecs
             AddFilter(newSystem.Filter);
         }
 
+        private void MarkCmdDestroyEntity(CmdBuffer buffer)
+        {
+            foreach (CmdEntry cmd in _mainCmdBuffer.Buffer)
+            {
+                if (cmd.Cmd == WorldCmd.Destroy)
+                {
+                    if (IsValidEntity(cmd.Target))
+                    {
+                        _entity[cmd.Target.Index].IsMarkDelete = true;
+                    }
+                    else
+                    {
+                        Console.Error.WriteLine($"{cmd.Target} is not a valid entity. ignore");
+                    }
+                }
+            }
+        }
+
+        private void ExecuteCmdBufferDestroyEntity()
+        {
+            for (int i = 0; i < _entity.Count; i++)
+            {
+                if (_entity[i].IsMarkDelete)
+                {
+                    DestroyEntity(i);
+                    _entity[i].IsMarkDelete = false;
+                }
+            }
+        }
+
+        private void ExecuteCmdBuffer(CmdBuffer buffer)
+        {
+            foreach (CmdEntry cmd in _mainCmdBuffer.Buffer)
+            {
+                switch (cmd.Cmd)
+                {
+                    case WorldCmd.Create:
+                        CreateEntity(cmd.CreateType!);
+                        break;
+                    case WorldCmd.AddComponent:
+                        InternalAddComponent(cmd.Target.Index, cmd.AddType);
+                        break;
+                    case WorldCmd.RemoveComponent:
+                        InternalRemoveComponent(cmd.Target.Index, cmd.RemoveType);
+                        break;
+                    default:
+                        break;
+                }
+            }
+            _mainCmdBuffer.Clear();
+        }
+
         public void OnUpdate()
         {
             foreach (var system in _system)
             {
-                system.OnUpdate();
+                system.OnUpdate(this, _mainCmdBuffer);
+            }
+
+            MarkCmdDestroyEntity(_mainCmdBuffer);
+            ExecuteCmdBufferDestroyEntity();
+            ExecuteCmdBuffer(_mainCmdBuffer);
+        }
+
+        public void FilterEntity(IEntityFilter filter)
+        {
+            foreach (var arch in _component.Keys)
+            {
+                if (filter.IsMatch(arch))
+                {
+                    filter.MatchedArchetype.Add(arch);
+                }
             }
         }
     }

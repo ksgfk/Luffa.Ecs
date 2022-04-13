@@ -80,7 +80,6 @@ namespace Luffa.Ecs.Test
             var b = new EntityArchetype(new[] { TypeInfo.Get<Move>(), TypeInfo.Get<Idle>() });
             var c = new EntityArchetype(new[] { TypeInfo.Get<Move>() });
             world.AddArchetype(a);
-            Assert.ThrowsException<ArgumentException>(() => world.AddArchetype(a));
             Assert.AreEqual(b, world.Attach(c, TypeInfo.Get<Idle>()));
             Assert.AreEqual(c, world.Detach(a, TypeInfo.Get<Jump>()));
         }

@@ -7,16 +7,18 @@ namespace Luffa.Ecs
 {
     public static class TypeInfo
     {
-        public readonly struct ComponentInfo
+        public class ComponentInfo
         {
+            public readonly Type Type;
             public readonly bool IsUnmanaged;
             public readonly int Size;
 
-            public static ComponentInfo Unmanaged(int size) { return new ComponentInfo(true, size); }
-            public static ComponentInfo Managed() { return new ComponentInfo(false, 0); }
+            public static ComponentInfo Unmanaged(Type type, int size) { return new ComponentInfo(type, true, size); }
+            public static ComponentInfo Managed(Type type) { return new ComponentInfo(type, false, 0); }
 
-            private ComponentInfo(bool isUnmanaged, int size)
+            private ComponentInfo(Type type, bool isUnmanaged, int size)
             {
+                Type = type;
                 IsUnmanaged = isUnmanaged;
                 Size = size;
             }
@@ -37,9 +39,10 @@ namespace Luffa.Ecs
             return ComInfo[type.Id].Size;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ComponentType Get<T>() where T : IComponent
         {
-            return new ComponentType(TypeInfo<T>.Type, TypeInfo<T>.Id);
+            return new ComponentType(TypeInfo<T>.Id);
         }
     }
 
@@ -56,11 +59,11 @@ namespace Luffa.Ecs
             Id = TypeInfo.ComInfo.Count;
             if (IsUnmanaged)
             {
-                TypeInfo.ComInfo.Add(TypeInfo.ComponentInfo.Unmanaged(Unsafe.SizeOf<T>()));
+                TypeInfo.ComInfo.Add(TypeInfo.ComponentInfo.Unmanaged(Type, Unsafe.SizeOf<T>()));
             }
             else
             {
-                TypeInfo.ComInfo.Add(TypeInfo.ComponentInfo.Managed());
+                TypeInfo.ComInfo.Add(TypeInfo.ComponentInfo.Managed(Type));
             }
         }
     }
@@ -68,18 +71,17 @@ namespace Luffa.Ecs
     [DebuggerDisplay("Id = {Id}, Type = {Type}")]
     public readonly struct ComponentType : IEquatable<ComponentType>, IComparable<ComponentType>
     {
-        public Type Type { get; }
-        public int Id { get; }
+        public Type Type => TypeInfo.ComInfo[Id].Type;
+        public readonly int Id;
 
-        internal ComponentType(Type type, int id)
+        internal ComponentType(int id)
         {
-            Type = type ?? throw new ArgumentNullException(nameof(type));
             Id = id;
         }
 
         public bool Equals(ComponentType other)
         {
-            return Id == other.Id && Type == other.Type;
+            return Id == other.Id;
         }
 
         public override bool Equals(object obj)
@@ -89,7 +91,7 @@ namespace Luffa.Ecs
             return Equals(c);
         }
 
-        public override int GetHashCode() => HashCode.Combine(Type, Id);
+        public override int GetHashCode() => HashCode.Combine(Id);
 
         public int CompareTo(ComponentType other)
         {
@@ -101,7 +103,7 @@ namespace Luffa.Ecs
 
         public static bool operator ==(ComponentType lhs, ComponentType rhs)
         {
-            return lhs.Equals(rhs);
+            return lhs.Id == rhs.Id;
         }
 
         public static bool operator !=(ComponentType lhs, ComponentType rhs)

@@ -5,7 +5,7 @@ namespace Luffa.Ecs
 {
     public interface IEntityFilter
     {
-        List<EntityMemory> MatchedEntity { get; }
+        ISet<EntityArchetype> MatchedArchetype { get; }
 
         bool IsMatch(EntityArchetype archetype);
     }
@@ -28,12 +28,12 @@ namespace Luffa.Ecs
 
         private readonly ComponentType[] _require;
         private readonly ComponentType[] _exclude;
-        private readonly List<EntityMemory> _target;
+        private readonly HashSet<EntityArchetype> _target;
 
         public IReadOnlyList<ComponentType> Require => _require;
         public IReadOnlyList<ComponentType> Exclude => _exclude;
         public int MatchedCount => _target.Count;
-        public List<EntityMemory> MatchedEntity => _target;
+        public ISet<EntityArchetype> MatchedArchetype => _target;
 
         public static EntityFilter FromRequire(params ComponentType[] require)
         {
@@ -44,7 +44,7 @@ namespace Luffa.Ecs
         {
             _require = require;
             _exclude = exclude;
-            _target = new List<EntityMemory>();
+            _target = new HashSet<EntityArchetype>();
         }
 
         public bool IsMatch(EntityArchetype archetype)

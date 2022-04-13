@@ -27,7 +27,7 @@ namespace Luffa.Ecs.Test
 
             {
                 int i = 0;
-                var e = world.GetEntityMemory(world.GetEntityUnsafe(0));
+                var e = world.GetEntityMemoryUnsafe(world.GetEntityUnsafe(0));
                 var viewer = e.GetViewer();
                 var entity = e.GetEntityLocator();
                 foreach (var index in viewer)
@@ -45,7 +45,7 @@ namespace Luffa.Ecs.Test
 
             {
                 int i = 0;
-                var e = world.GetEntityMemory(world.GetEntityUnsafe(0));
+                var e = world.GetEntityMemoryUnsafe(world.GetEntityUnsafe(0));
                 var viewer = e.GetViewer();
                 var entity = e.GetEntityLocator();
                 foreach (var index in viewer)

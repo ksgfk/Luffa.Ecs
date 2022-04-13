@@ -10,5 +10,10 @@
             Index = index;
             Version = version;
         }
+
+        public override string ToString()
+        {
+            return $"Index: {Index} Version: {Version}";
+        }
     }
 }

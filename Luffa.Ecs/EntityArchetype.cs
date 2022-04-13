@@ -16,6 +16,7 @@ namespace Luffa.Ecs
         public IReadOnlyList<ComponentType> ManagedTypes => _managedTypes;
         public IReadOnlyList<ComponentType> UnmanagedTypes => _unmanagedTypes;
         public ComponentType this[int index] => _sortedTypes[index];
+        public ComponentType[] RawArray => _sortedTypes;
 
         public static EntityArchetype Get(params ComponentType[] types)
         {

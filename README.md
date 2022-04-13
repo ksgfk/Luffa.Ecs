@@ -45,7 +45,7 @@ public class MoveSystem : SystemBase
         TypeInfo.Get<Move>()
     );
     
-    protected override void UpdateEntity(EntityMemory memory)
+    protected override void UpdateEntity(World world, EntityMemory memory, CmdBuffer cmd)
     {
         var view = GetComponentViewer(memory);
         var trans = GetUnmanagedLocator<Transform>(memory);
@@ -66,6 +66,7 @@ internal static class Program
         World world = new World();
         EntityArchetype canMove = EntityArchetype.Get(TypeInfo.Get<Transform>(), TypeInfo.Get<Move>());
         world.CreateEntity(canMove);
+        world.AddSystem<MoveSystem>();
         world.OnUpdate();
     }
 }
@@ -73,7 +74,7 @@ internal static class Program
 
 ## TODO
 
-* CommandBuffer to change world safely
+* Singleton Component
 
 ## Detail
 
@@ -95,7 +96,7 @@ C#的类型可以大致划分成**managed**和**unmanaged**两类。关于非托
 
 **绝对不可以在枚举Entity的时候调用可以改变World结构的方法，包括增删Entity，增删Entity拥有的Component**
 
-用于记录实体增删的CommandBuffer在写了（咕咕咕）
+可以使用`CmdBuffer`来更改实体
 
 ### About Filter
 

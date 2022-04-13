@@ -238,7 +238,7 @@ namespace Luffa.Ecs
         {
             int comIndex = _archetype.IndexInManaged(TypeInfo.Get<T>());
             Debug.Assert(typeof(T) == _archetype.ManagedTypes[comIndex].Type);
-            return ref ((ComponentList<T>)_managed[comIndex]).AsSpan()[index];
+            return ref ((ComponentList<T>)_managed[comIndex]).GetReference(index);
         }
 
         /// <summary>
@@ -248,7 +248,7 @@ namespace Luffa.Ecs
         public ref T GetManagedComponent<T>(int index, int comIndex) where T : IComponent
         {
             Debug.Assert(typeof(T) == _archetype.UnmanagedTypes[comIndex].Type);
-            return ref ((ComponentList<T>)_managed[comIndex]).AsSpan()[index];
+            return ref ((ComponentList<T>)_managed[comIndex]).GetReference(index);
         }
     }
 }
